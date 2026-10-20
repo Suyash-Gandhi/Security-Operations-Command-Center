@@ -1,0 +1,4 @@
+# Specification documents are source artifacts provided by the product/skill
+# specs; keep them byte-identical for traceability.
+docs/
+security-operations-command-center-big-pickle-skill/

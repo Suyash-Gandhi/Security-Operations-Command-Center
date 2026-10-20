@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  REVOKED
+}
+
+enum SessionStatus {
+  ACTIVE
+  REVOKED
+}
+
+model Organization {
+  id          String             @id @default(uuid()) @db.Uuid
+  name        String
+  status      OrganizationStatus @default(ACTIVE)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  memberships OrganizationMembership[]
+  auditLogs   AuditLog[]
+
+  @@index([status])
+}
+
+model User {
+  id             String   @id @default(uuid()) @db.Uuid
+  normalizedEmail String  @unique
+  displayName    String
+  status         UserStatus @default(ACTIVE)
+  passwordHash   String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  memberships    OrganizationMembership[]
+  sessions       Session[]
+  auditLogs      AuditLog[]
+}
+
+model OrganizationMembership {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  userId         String           @db.Uuid
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles          MembershipRole[]
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId, status])
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String           @unique
+  description     String
+  rolePermissions RolePermission[]
+  membershipRoles MembershipRole[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  code            String           @unique
+  description     String
+  rolePermissions RolePermission[]
+  createdAt       DateTime         @default(now())
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([roleId, permissionId])
+}
+
+model MembershipRole {
+  membershipId String     @db.Uuid
+  roleId       String     @db.Uuid
+  membership   OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([membershipId, roleId])
+}
+
+model Session {
+  id         String        @id @default(uuid()) @db.Uuid
+  userId     String        @db.Uuid
+  tokenHash  String        @unique
+  status     SessionStatus @default(ACTIVE)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime      @default(now())
+  lastSeenAt DateTime      @default(now())
+  userAgent  String?
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @db.Uuid
+  actorId        String?       @db.Uuid
+  action         String
+  resourceType   String
+  resourceId     String?       @db.Uuid
+  requestId      String?
+  metadata       Json?
+  occurredAt     DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor          User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, occurredAt(sort: Desc)])
+  @@index([actorId])
+}
