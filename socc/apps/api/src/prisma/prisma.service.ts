@@ -62,6 +62,25 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   /**
+   * Runs work with only the presented source-credential digest GUC set.
+   *
+   * Event-source authentication happens before an organization context is
+   * known. The EventSource RLS policy permits selecting exactly the row whose
+   * stored credential hash matches this transaction-local value, so the
+   * runtime role can authenticate a source without being able to enumerate or
+   * read any other source.
+   */
+  async runWithSourceCredential<T>(
+    credentialHash: string,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_source_credential_hash', ${credentialHash}, true)`;
+      return fn(tx);
+    });
+  }
+
+  /**
    * Runs work with only the authenticated-user GUC set. Used before an
    * organization context exists (e.g. listing a user's own memberships).
    */

@@ -41,6 +41,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const body = exception.getResponse() as { message?: string; details?: unknown };
       message = typeof body.message === "string" ? body.message : exception.message;
       details = body.details;
+    } else if (
+      exception instanceof HttpException &&
+      exception.getStatus() === HttpStatus.PAYLOAD_TOO_LARGE
+    ) {
+      status = HttpStatus.PAYLOAD_TOO_LARGE;
+      code = ErrorCodes.PAYLOAD_TOO_LARGE;
+      message = "Request payload is too large.";
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const body = exception.getResponse();
