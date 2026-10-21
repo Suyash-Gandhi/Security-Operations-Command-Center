@@ -49,6 +49,35 @@ export default async function globalSetup(): Promise<void> {
     });
   });
 
+  const redisUrl = process.env.SOC_REDIS_URL ?? "redis://localhost:6380";
+  const parsedRedis = new URL(redisUrl);
+  const redisHost = parsedRedis.hostname || "localhost";
+  const redisPort = Number(parsedRedis.port || 6379);
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const socket = createConnection({ host: redisHost, port: redisPort }, () => {
+      socket.end();
+      resolvePromise();
+    });
+    socket.setTimeout(5000, () => {
+      socket.destroy();
+      rejectPromise(
+        new Error(
+          `BLOCKED: Redis is not reachable at ${redisHost}:${redisPort}. ` +
+            `Start the SOCC-owned Redis with 'pnpm redis:up' from the repository root.`,
+        ),
+      );
+    });
+    socket.on("error", (err) => {
+      rejectPromise(
+        new Error(
+          `BLOCKED: Redis is not reachable at ${redisHost}:${redisPort}. ` +
+            `Start the SOCC-owned Redis with 'pnpm redis:up' from the repository root. ` +
+            `(${err.message})`,
+        ),
+      );
+    });
+  });
+
   execSync("pnpm exec prisma migrate deploy", {
     cwd: process.cwd(),
     stdio: "inherit",

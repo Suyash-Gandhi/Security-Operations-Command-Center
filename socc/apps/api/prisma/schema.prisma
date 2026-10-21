@@ -28,14 +28,36 @@ enum SessionStatus {
   REVOKED
 }
 
+enum AssetStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum EventSourceStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum EventBatchStatus {
+  ACCEPTED
+  COMPLETED
+  REJECTED
+}
+
 model Organization {
-  id          String             @id @default(uuid()) @db.Uuid
-  name        String
-  status      OrganizationStatus @default(ACTIVE)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  memberships OrganizationMembership[]
-  auditLogs   AuditLog[]
+  id                 String             @id @default(uuid()) @db.Uuid
+  name               String
+  status             OrganizationStatus @default(ACTIVE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  memberships        OrganizationMembership[]
+  auditLogs          AuditLog[]
+  assets             Asset[]
+  eventSources       EventSource[]
+  eventBatches       EventBatch[]
+  securityEvents     SecurityEvent[]
+  outboxMessages     OutboxMessage[]
+  idempotencyRecords IdempotencyRecord[]
 
   @@index([status])
 }
@@ -138,4 +160,126 @@ model AuditLog {
 
   @@index([organizationId, occurredAt(sort: Desc)])
   @@index([actorId])
+}
+
+model Asset {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  name           String
+  assetType      String
+  hostname       String?
+  environment    String?
+  criticality    String?
+  owner          String?
+  status         AssetStatus     @default(ACTIVE)
+  lastSeenAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events         SecurityEvent[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, hostname])
+  @@index([organizationId, name])
+}
+
+model EventSource {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  name           String
+  sourceType     String
+  credentialHash String            @unique
+  status         EventSourceStatus @default(ACTIVE)
+  lastEventAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batches        EventBatch[]
+  events         SecurityEvent[]
+
+  @@index([organizationId, status])
+}
+
+model EventBatch {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  sourceId       String           @db.Uuid
+  status         EventBatchStatus @default(ACCEPTED)
+  acceptedCount  Int              @default(0)
+  rejectedCount  Int              @default(0)
+  processedCount Int              @default(0)
+  errorSummary   String?
+  createdAt      DateTime         @default(now())
+  completedAt    DateTime?
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source         EventSource      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  events         SecurityEvent[]
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([organizationId, status])
+  @@index([sourceId])
+}
+
+model SecurityEvent {
+  id                   String        @id @default(uuid()) @db.Uuid
+  batchId              String        @db.Uuid
+  organizationId       String        @db.Uuid
+  sourceId             String        @db.Uuid
+  assetId              String?       @db.Uuid
+  sourceEventId        String?
+  dedupeKey            String
+  schemaVersion        Int           @default(1)
+  eventType            String
+  eventTime            DateTime
+  receivedAt           DateTime      @default(now())
+  severity             String?
+  actor                String?
+  sourceIp             String?
+  normalizedPayload    Json
+  rawPayloadReference  String?
+  processedAt          DateTime?
+  createdAt            DateTime      @default(now())
+  organization         Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source               EventSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  batch                EventBatch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  asset                Asset?        @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, sourceId, dedupeKey])
+  @@index([organizationId, eventTime(sort: Desc), id])
+  @@index([organizationId, eventType, eventTime(sort: Desc)])
+  @@index([organizationId, sourceId, eventTime(sort: Desc)])
+  @@index([assetId])
+}
+
+model OutboxMessage {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  aggregateType  String
+  aggregateId    String       @db.Uuid
+  messageType    String
+  schemaVersion  Int          @default(1)
+  payload        Json
+  createdAt      DateTime     @default(now())
+  publishedAt    DateTime?
+  attemptCount   Int          @default(0)
+  lastError      String?
+  nextAttemptAt  DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, publishedAt, createdAt])
+  @@index([publishedAt, nextAttemptAt])
+}
+
+model IdempotencyRecord {
+  id                String       @id @default(uuid()) @db.Uuid
+  organizationId    String       @db.Uuid
+  idempotencyKey    String
+  requestHash       String
+  resourceReference String       @db.Uuid
+  createdAt         DateTime     @default(now())
+  expiresAt         DateTime
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, expiresAt])
 }

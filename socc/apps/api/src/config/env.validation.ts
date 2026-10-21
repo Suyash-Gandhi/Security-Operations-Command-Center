@@ -4,6 +4,10 @@ const postgresUrl = z.string().refine((v) => /^postgres(ql)?:\/\//.test(v), {
   message: "must be a postgresql:// or postgres:// URL",
 });
 
+const redisUrl = z.string().refine((v) => /^rediss?:\/\//.test(v), {
+  message: "must be a redis:// or rediss:// URL",
+});
+
 const boolFromEnv = z
   .enum(["true", "false"])
   .default("false")
@@ -21,6 +25,17 @@ export const envSchema = z
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
     SOC_APP_DATABASE_URL: postgresUrl,
+    SOC_REDIS_URL: redisUrl.default("redis://localhost:6380"),
+    SOC_REDIS_STREAM: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9._:-]{1,128}$/)
+      .default("socc.events.v1"),
+    SOC_REDIS_CONSUMER_GROUP: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9._:-]{1,128}$/)
+      .default("socc-event-processors"),
     SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(8),
     COOKIE_SECURE: boolFromEnv,
     ALLOWED_ORIGINS: z

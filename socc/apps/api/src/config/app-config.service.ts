@@ -30,6 +30,18 @@ export class AppConfigService {
     return this.config.get("SOC_APP_DATABASE_URL", { infer: true });
   }
 
+  get redisUrl(): string {
+    return this.config.get("SOC_REDIS_URL", { infer: true });
+  }
+
+  get redisStream(): string {
+    return this.config.get("SOC_REDIS_STREAM", { infer: true });
+  }
+
+  get redisConsumerGroup(): string {
+    return this.config.get("SOC_REDIS_CONSUMER_GROUP", { infer: true });
+  }
+
   get sessionTtlMs(): number {
     return this.config.get("SESSION_TTL_HOURS", { infer: true }) * 60 * 60 * 1000;
   }

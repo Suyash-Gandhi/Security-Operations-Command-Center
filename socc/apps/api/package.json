@@ -7,6 +7,9 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
+    "worker": "tsx src/worker.ts",
+    "worker:dev": "tsx watch src/worker.ts",
+    "worker:start": "node dist/worker.js",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
@@ -25,6 +28,7 @@
     "@prisma/client": "6.19.3",
     "argon2": "^0.45.0",
     "cookie-parser": "^1.4.7",
+    "ioredis": "^6.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^4.0.0"

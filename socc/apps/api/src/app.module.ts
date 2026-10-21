@@ -7,7 +7,7 @@ import { JsonLoggerService } from "./logger/json-logger.service.js";
 import { PrismaModule } from "./prisma/prisma.module.js";
 import { RequestIdMiddleware } from "./common/request-id.middleware.js";
 import { LoginThrottleService } from "./common/login-throttle.service.js";
-import { AuditService } from "./audit/audit.service.js";
+import { AuditModule } from "./audit/audit.module.js";
 import { SessionService } from "./auth/session.service.js";
 import { PasswordService } from "./auth/password.service.js";
 import { AuthService } from "./auth/auth.service.js";
@@ -19,6 +19,10 @@ import { OrganizationsController } from "./organizations/organizations.controlle
 import { OrganizationContextGuard } from "./authorization/organization-context.guard.js";
 import { PermissionsGuard } from "./authorization/permissions.guard.js";
 import { HealthController } from "./health/health.controller.js";
+import { AssetsModule } from "./assets/assets.module.js";
+import { EventSourcesModule } from "./event-sources/event-sources.module.js";
+import { IngestionModule } from "./ingestion/ingestion.module.js";
+import { EventsModule } from "./events/events.module.js";
 
 @Module({
   imports: [
@@ -28,12 +32,16 @@ import { HealthController } from "./health/health.controller.js";
     }),
     AppConfigModule,
     PrismaModule,
+    AuditModule,
+    AssetsModule,
+    EventSourcesModule,
+    IngestionModule,
+    EventsModule,
   ],
   controllers: [HealthController, AuthController, OrganizationsController],
   providers: [
     JsonLoggerService,
     LoginThrottleService,
-    AuditService,
     SessionService,
     PasswordService,
     AuthService,
