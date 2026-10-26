@@ -59,60 +59,81 @@ async function ensureOrgWithOwner(
   return organizationId;
 }
 
-async function addAnalyst(
-  organizationId: string,
-  analystEmail: string,
-  analystName: string,
-  passwordHash: string,
-): Promise<void> {
-  const analystUserId = await ensureUser(analystEmail, analystName, passwordHash);
-  const existing = await prisma.organizationMembership.findUnique({
-    where: { organizationId_userId: { organizationId, userId: analystUserId } },
+async function ensureDetectionRules(): Promise<void> {
+  const existing = await prisma.detectionRule.findFirst({
+    where: { name: "Repeated failed logins" },
   });
   if (existing) return;
-  const analystRole = await prisma.role.findUniqueOrThrow({
-    where: { name: "SECURITY_ANALYST" },
-  });
-  await prisma.organizationMembership.create({
+  await prisma.detectionRule.create({
     data: {
-      organizationId,
-      userId: analystUserId,
-      status: "ACTIVE",
-      roles: { create: [{ roleId: analystRole.id }] },
+      organizationId: null,
+      name: "Repeated failed logins",
+      description:
+        "Detect multiple failed authentication attempts from same actor/source",
+      ruleType: "THRESHOLD",
+      configuration: {
+        ruleType: "THRESHOLD",
+        eventType: "auth.login.failed",
+        groupBy: ["actor", "sourceIp"],
+        threshold: 5,
+        windowMinutes: 5,
+      },
+      severity: "HIGH",
+      enabled: true,
+      version: 1,
     },
   });
 }
 
 async function main(): Promise<void> {
-  const passwordHash = await argon2.hash(DEV_PASSWORD, { type: argon2.argon2id });
-
-  const orgA = await ensureOrgWithOwner(
-    "Alpha Security (synthetic)",
-    "alice@orga.socc.test",
-    "Alice Owner (synthetic)",
+  const passwordHash = await argon2.hash(DEV_PASSWORD);
+  const org1 = await ensureOrgWithOwner(
+    "Acme Corp",
+    "owner@acme.example",
+    "Acme Owner",
     passwordHash,
   );
-  await ensureOrgWithOwner(
-    "Bravo Security (synthetic)",
-    "bob@orgb.socc.test",
-    "Bob Owner (synthetic)",
-    passwordHash,
-  );
-  await addAnalyst(
-    orgA,
-    "analyst@orga.socc.test",
-    "Ana Analyst (synthetic)",
+  const org2 = await ensureOrgWithOwner(
+    "Globex",
+    "owner@globex.example",
+    "Globex Owner",
     passwordHash,
   );
 
-  console.info("Seed complete (synthetic dev data).");
-  console.info("  alice@orga.socc.test / bob@orgb.socc.test / analyst@orga.socc.test");
-  console.info(`  password (dev only): ${DEV_PASSWORD}`);
+  const analystId = await ensureUser(
+    "analyst@acme.example",
+    "Acme Analyst",
+    passwordHash,
+  );
+  const analystRole = await prisma.role.findUniqueOrThrow({
+    where: { name: "SECURITY_ANALYST" },
+  });
+  const existingAnalystMembership = await prisma.organizationMembership.findUnique({
+    where: { organizationId_userId: { organizationId: org1, userId: analystId } },
+  });
+  if (!existingAnalystMembership) {
+    await prisma.organizationMembership.create({
+      data: {
+        organizationId: org1,
+        userId: analystId,
+        status: "ACTIVE",
+        roles: { create: [{ roleId: analystRole.id }] },
+      },
+    });
+  }
+
+  await ensureDetectionRules();
+
+  console.log("Seed complete");
+  console.log(`Acme Corp org: ${org1}`);
+  console.log(`Globex org: ${org2}`);
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
-    process.exitCode = 1;
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

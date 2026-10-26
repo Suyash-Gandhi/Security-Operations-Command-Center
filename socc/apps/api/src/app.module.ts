@@ -23,6 +23,7 @@ import { AssetsModule } from "./assets/assets.module.js";
 import { EventSourcesModule } from "./event-sources/event-sources.module.js";
 import { IngestionModule } from "./ingestion/ingestion.module.js";
 import { EventsModule } from "./events/events.module.js";
+import { DetectionModule } from "./detection/detection.module.js";
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { EventsModule } from "./events/events.module.js";
     EventSourcesModule,
     IngestionModule,
     EventsModule,
+    DetectionModule,
   ],
   controllers: [HealthController, AuthController, OrganizationsController],
   providers: [

@@ -58,6 +58,9 @@ model Organization {
   securityEvents     SecurityEvent[]
   outboxMessages     OutboxMessage[]
   idempotencyRecords IdempotencyRecord[]
+  detectionRules     DetectionRule[]
+  detectionMatches   DetectionMatch[]
+  alerts             Alert[]
 
   @@index([status])
 }
@@ -221,28 +224,30 @@ model EventBatch {
 }
 
 model SecurityEvent {
-  id                   String        @id @default(uuid()) @db.Uuid
-  batchId              String        @db.Uuid
-  organizationId       String        @db.Uuid
-  sourceId             String        @db.Uuid
-  assetId              String?       @db.Uuid
+  id                   String           @id @default(uuid()) @db.Uuid
+  batchId              String           @db.Uuid
+  organizationId       String           @db.Uuid
+  sourceId             String           @db.Uuid
+  assetId              String?          @db.Uuid
   sourceEventId        String?
   dedupeKey            String
-  schemaVersion        Int           @default(1)
+  schemaVersion        Int              @default(1)
   eventType            String
   eventTime            DateTime
-  receivedAt           DateTime      @default(now())
+  receivedAt           DateTime         @default(now())
   severity             String?
   actor                String?
   sourceIp             String?
   normalizedPayload    Json
   rawPayloadReference  String?
   processedAt          DateTime?
-  createdAt            DateTime      @default(now())
-  organization         Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  source               EventSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  batch                EventBatch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  asset                Asset?        @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  createdAt            DateTime         @default(now())
+  organization         Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source               EventSource      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  batch                EventBatch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  asset                Asset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  detectionMatches     DetectionMatch[]
+  alertEvents          AlertEvent[]
 
   @@unique([organizationId, sourceId, dedupeKey])
   @@index([organizationId, eventTime(sort: Desc), id])
@@ -282,4 +287,97 @@ model IdempotencyRecord {
 
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, expiresAt])
+}
+
+enum DetectionRuleType {
+  THRESHOLD
+  SEQUENCE
+}
+
+enum DetectionSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  CLOSED
+}
+
+model DetectionRule {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String?          @db.Uuid
+  name           String
+  description    String
+  ruleType       DetectionRuleType
+  configuration  Json
+  severity       DetectionSeverity
+  enabled        Boolean          @default(true)
+  version        Int              @default(1)
+  createdBy      String?          @db.Uuid
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  matches        DetectionMatch[]
+  alerts         Alert[]
+
+  @@index([organizationId, enabled])
+  @@index([enabled])
+}
+
+model DetectionMatch {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  ruleId         String        @db.Uuid
+  ruleVersion    Int
+  matchKey       String
+  eventId        String        @db.Uuid
+  matchedAt      DateTime      @default(now())
+  evidence       Json
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rule           DetectionRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  event          SecurityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, ruleId, matchKey])
+  @@index([organizationId, matchedAt(sort: Desc)])
+  @@index([ruleId])
+  @@index([eventId])
+}
+
+model Alert {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  ruleId         String        @db.Uuid
+  ruleVersion    Int
+  severity       DetectionSeverity
+  status         AlertStatus   @default(OPEN)
+  title          String
+  description    String
+  matchKey       String
+  firstSeenAt    DateTime      @default(now())
+  lastSeenAt     DateTime      @default(now())
+  count          Int           @default(1)
+  assetId        String?       @db.Uuid
+  primaryEventId String?      @db.Uuid
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rule           DetectionRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  events         AlertEvent[]
+
+  @@unique([organizationId, ruleId, matchKey])
+  @@index([organizationId, status, severity, lastSeenAt(sort: Desc)])
+}
+
+model AlertEvent {
+  alertId   String        @db.Uuid
+  eventId   String        @db.Uuid
+  createdAt DateTime      @default(now())
+  alert     Alert         @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  event     SecurityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([alertId, eventId])
 }

@@ -70,9 +70,25 @@ describe("tenant isolation between two organizations", () => {
   });
 
   afterAll(async () => {
-    await app.close();
-    await cleanupSynthetic(owner, userIds, orgIds);
-    await owner.$disconnect();
+    if (app && typeof (app as { close?: () => Promise<void> }).close === "function") {
+      try {
+        await (app as { close: () => Promise<void> }).close();
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    if (owner) {
+      try {
+        await cleanupSynthetic(owner, userIds, orgIds);
+      } catch {
+        // ignore cleanup errors
+      }
+      try {
+        await owner.$disconnect();
+      } catch {
+        // ignore cleanup errors
+      }
+    }
   });
 
   it("each organization only lists its own members", async () => {

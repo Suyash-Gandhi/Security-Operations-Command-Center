@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { AppConfigService } from "../config/app-config.service.js";
 import { RedisService } from "./redis.service.js";
+import { DetectionEngineService } from "../detection/detection-engine.service.js";
 
 interface StreamEntry {
   id: string;
@@ -109,6 +110,7 @@ export class EventConsumerService {
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
     private readonly redis: RedisService,
+    private readonly detection: DetectionEngineService,
   ) {}
 
   async run(signal: AbortSignal): Promise<void> {
@@ -287,6 +289,15 @@ export class EventConsumerService {
         });
       }
     });
+    try {
+      await this.detection.evaluateEvent(message.eventId, message.organizationId);
+    } catch (error) {
+      this.logger.warn(
+        `Detection evaluation failed for event ${message.eventId}: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`,
+      );
+    }
   }
 
   private keyForRetries(): string {
